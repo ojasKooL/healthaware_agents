@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 import base64
 from PIL import Image
 import io
-
 # Load environment variables from .env file
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -23,7 +22,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # Page configuration
 st.set_page_config(page_title="Medical Report Analyzer", page_icon="📈")
-st.sidebar.header("Medical Image Analysis Agent")
+st.sidebar.header("Medical Report Analysis System")
 st.title("Medical Report Analysis System")
 
 # Initialize session state
