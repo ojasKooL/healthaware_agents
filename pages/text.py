@@ -3,18 +3,21 @@ import os
 import json
 import tempfile
 from pathlib import Path
-from pdf2image import convert_from_path
+import PyPDF2
 import google.generativeai as genai
 from langchain_community.chat_models import ChatOpenAI
 from langchain.tools import Tool
 from langchain.agents import AgentType, initialize_agent
 from dotenv import load_dotenv
+import base64
+from PIL import Image
+import io
 
 # Load environment variables from .env file
 load_dotenv()
-
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-OPENAI_API_KEY=os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -37,8 +40,7 @@ tab1, tab2, tab3 = st.tabs(["Upload & Process", "Lab Results", "Diagnosis"])
 # Medical report extraction prompt
 MEDICAL_PROMPT = """
 GIVE PLAINTEXT OUTPUT ONLY
-Analyze this multi-page medical report and extract structured data following these rules:
-
+Analyze this medical report and extract structured data following these rules:
 1. Output Format (JSON):
 {
   "patient_info": {
@@ -71,7 +73,6 @@ Analyze this multi-page medical report and extract structured data following the
     "doctor_name": "str"
   }
 }
-
 2. Extraction Rules:
 - Use SNOMED CT codes where applicable
 - Convert all dates to ISO 8601 format
@@ -79,7 +80,6 @@ Analyze this multi-page medical report and extract structured data following the
 - Handle missing fields as null
 - Preserve decimal precision for numerical values
 - Flag abnormal lab values with '[ABNORMAL]' prefix
-
 3. Include confidence scores (0-1) for each extracted field
 """
 
@@ -87,25 +87,41 @@ Analyze this multi-page medical report and extract structured data following the
 LAB_MERGE_PROMPT = """
 GIVE PLAINTEXT OUTPUT ONLY
 Merge test results based on the common key value pair and by grouping values under their respective date. Ensure the output retains the unit and reference_range while restructuring the data to consolidate values by date.
-
 Instructions:
 Group test results by test_name: All entries with the same test name should be merged into a single dictionary.
 Organize values by date: If multiple entries exist for the same test on a particular date, store all value entries as a list under that date.
 Retain metadata: The unit and reference_range should remain unchanged.
 Ensure structured output: Convert the list of test results into a single dictionary with the desired format.
-
 OUTPUT SHOULD CONTAIN ONLY FINAL REPORT AND NOTHING ELSE
 """
 
 # Functions
+def extract_pdf_text(pdf_path):
+    """Extract text from PDF using PyPDF2"""
+    try:
+        text_content = ""
+        with open(pdf_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            for page_num in range(len(pdf_reader.pages)):
+                text_content += pdf_reader.pages[page_num].extract_text() + "\n\n"
+        return text_content
+    except Exception as e:
+        st.error(f"PDF extraction error: {str(e)}")
+        return ""
+
 def extract_medical_report(pdf_path):
     """Process medical PDF reports into structured JSON data"""
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        pages = convert_from_path(pdf_path, dpi=300)
-        response = model.generate_content([MEDICAL_PROMPT, *pages])
-
+        # Extract text from PDF instead of using pdf2image
+        text_content = extract_pdf_text(pdf_path)
+        
+        if not text_content:
+            st.error("Could not extract text from PDF")
+            return {}
+            
+        response = model.generate_content([MEDICAL_PROMPT, text_content])
         # Clean up response text
         cleaned_text = response.text.strip().replace('```json', '').replace('```', '').strip()
         
