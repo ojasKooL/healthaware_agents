@@ -78,6 +78,7 @@ poppler-utils
 propcache==0.3.1
 proto-plus==1.26.1
 protobuf==5.29.4
+PyPDF2==3.0.1
 pyarrow==19.0.1
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
